@@ -1,133 +1,119 @@
 ﻿#include <iostream>
 #include <string>
-#include <unordered_map>
-#include <algorithm>
-#include <cctype>
+#include <ctime>
+#include <iomanip>
+#include <limits>
+
 using namespace std;
 
-// Cấu trúc node lưu từng từ trong danh sách liên kết
-struct WordNode {
-    string word;       // Từ
-    WordNode* next;    // Con trỏ đến node tiếp theo
+// Node để lưu thông tin của file
+struct FileNode {
+    string fileName;
+    double fileSize; // Đơn vị: MB
+    time_t creationTime; // Thời gian tạo file
+    FileNode* next;
 
-    WordNode(string w) : word(w), next(nullptr) {}
+    FileNode(string name, double size, time_t time)
+        : fileName(name), fileSize(size), creationTime(time), next(nullptr) {}
 };
 
 // Danh sách liên kết đơn
-class WordList {
+class FileList {
 private:
-    WordNode* head;
+    FileNode* head;
 
 public:
-    WordList() : head(nullptr) {}
+    FileList() : head(nullptr) {}
 
-    // Hàm thêm từ vào danh sách liên kết
-    void addWord(const string& word) {
-        WordNode* newNode = new WordNode(word);
+    // Hàm chèn file theo thứ tự thời gian
+    void insertFile(const string& name, double size, time_t time) {
+        FileNode* newNode = new FileNode(name, size, time);
 
-        if (!head) {
+        if (!head || head->creationTime > time) {
+            newNode->next = head;
             head = newNode;
         }
         else {
-            WordNode* current = head;
-            while (current->next) {
+            FileNode* current = head;
+            while (current->next && current->next->creationTime <= time) {
                 current = current->next;
             }
+            newNode->next = current->next;
             current->next = newNode;
         }
     }
 
-    // Hàm hiển thị các từ trong danh sách
-    void displayWords() const {
-        WordNode* current = head;
-        cout << "Câu hiện tại:\n";
+    // Tính tổng kích thước các file
+    double calculateTotalSize() const {
+        double totalSize = 0.0;
+        FileNode* current = head;
         while (current) {
-            cout << current->word << " ";
+            totalSize += current->fileSize;
             current = current->next;
         }
-        cout << endl;
+        return totalSize;
     }
 
-    // Tìm từ xuất hiện nhiều nhất
-    string findMostFrequentWord() const {
-        unordered_map<string, int> wordCount;
-        WordNode* current = head;
-
-        // Đếm số lần xuất hiện của từng từ
+    // In danh sách file
+    void displayFiles() const {
+        FileNode* current = head;
+        cout << "Danh sách file trong thư mục:\n";
         while (current) {
-            wordCount[current->word]++;
+            cout << "Tên file: " << current->fileName
+                << ", Kích thước: " << current->fileSize << " MB"
+                << ", Thời gian tạo: " << asctime(localtime(&current->creationTime));
             current = current->next;
         }
-
-        // Tìm từ xuất hiện nhiều nhất
-        string mostFrequentWord;
-        int maxCount = 0;
-        for (const auto& pair : wordCount) {
-            if (pair.second > maxCount) {
-                maxCount = pair.second;
-                mostFrequentWord = pair.first;
-            }
-        }
-
-        return mostFrequentWord;
     }
 
-    // Xóa từ láy
-    void removeRedundantRepeats() {
-        WordNode* current = head;
+    // Xóa các file nhỏ nhất để giảm kích thước tổng xuống dưới 32GB
+    void removeSmallestFiles(double maxSizeMB) {
+        while (calculateTotalSize() > maxSizeMB) {
+            FileNode* prev = nullptr, * current = head, * minNode = head, * minPrev = nullptr;
 
-        while (current && current->next) {
-            if (current->word == current->next->word) {
-                WordNode* redundantNode = current->next;
-                current->next = current->next->next;
-                delete redundantNode;
-            }
-            else {
+            // Tìm file nhỏ nhất
+            while (current) {
+                if (current->fileSize < minNode->fileSize) {
+                    minPrev = prev;
+                    minNode = current;
+                }
+                prev = current;
                 current = current->next;
             }
+
+            // Xóa file nhỏ nhất
+            if (minPrev) {
+                minPrev->next = minNode->next;
+            }
+            else {
+                head = minNode->next;
+            }
+            cout << "Đã xóa file: " << minNode->fileName << ", Kích thước: " << minNode->fileSize << " MB\n";
+            delete minNode;
         }
-    }
-
-    // Đếm số từ vựng (không trùng lặp)
-    int countUniqueWords() const {
-        unordered_map<string, bool> uniqueWords;
-        WordNode* current = head;
-
-        while (current) {
-            uniqueWords[current->word] = true;
-            current = current->next;
-        }
-
-        return uniqueWords.size();
     }
 };
 
 int main() {
-    WordList sentence;
+    FileList folder;
 
-    // Thêm từ vào danh sách (câu mẫu)
-    sentence.addWord("xanh");
-    sentence.addWord("xanh");
-    sentence.addWord("trời");
-    sentence.addWord("cao");
-    sentence.addWord("cao");
-    sentence.addWord("xanh");
+    // Thêm các file vào danh sách
+    time_t now = time(0);
+    folder.insertFile("File1.txt", 500, now - 60);
+    folder.insertFile("File2.txt", 700, now - 120);
+    folder.insertFile("File3.txt", 300, now - 30);
+    folder.insertFile("File4.txt", 1200, now - 90);
 
-    cout << "Câu ban đầu:\n";
-    sentence.displayWords();
+    folder.displayFiles();
 
-    // Tìm từ xuất hiện nhiều nhất
-    string mostFrequentWord = sentence.findMostFrequentWord();
-    cout << "\nTừ xuất hiện nhiều nhất: " << mostFrequentWord << endl;
+    cout << "\nTổng kích thước thư mục: " << folder.calculateTotalSize() << " MB\n";
 
-    // Loại bỏ từ láy
-    cout << "\nLoại bỏ từ láy...\n";
-    sentence.removeRedundantRepeats();
-    sentence.displayWords();
+    // Giả sử USB có kích thước 32GB = 32768 MB
+    double maxUSBSize = 32768;
+    folder.removeSmallestFiles(maxUSBSize);
 
-    // Đếm số từ vựng (không trùng lặp)
-    int uniqueWordCount = sentence.countUniqueWords();
-    cout << "\nSố từ vựng không trùng lặp: " << uniqueWordCount << endl;
+    cout << "\nDanh sách file sau khi loại bỏ:\n";
+    folder.displayFiles();
 
     return 0;
 }
